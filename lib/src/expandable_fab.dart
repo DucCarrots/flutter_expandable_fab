@@ -83,6 +83,8 @@ class ExpandableFab extends StatefulWidget {
     this.openCloseStackAlignment = Alignment.center,
     this.elevation,
     this.margin = const EdgeInsets.all(0),
+    this.useChildWithFullWidth = false,
+    this.useWitcherAnimation = false,
   });
   // Margin for the FAB
   final EdgeInsets margin;
@@ -141,6 +143,11 @@ class ExpandableFab extends StatefulWidget {
 
   /// This controls the size of the shadow below the floating action button
   final double? elevation;
+
+  /// If true, the child will be given full width of the screen.
+  final bool useChildWithFullWidth;
+
+  final bool useWitcherAnimation;
 
   /// The state from the closest instance of this class that encloses the given context.
   static ExpandableFabState of(BuildContext context) {
@@ -299,7 +306,7 @@ class ExpandableFabState extends State<ExpandableFab>
           (widget.pos == ExpandableFabPos.left
               ? widget.margin.left
               : widget.pos == ExpandableFabPos.center
-                  ? 0
+                  ? widget.margin.right
                   : widget.margin.right),
       offset.dy + widget.margin.bottom,
     );
@@ -352,15 +359,34 @@ class ExpandableFabState extends State<ExpandableFab>
             child: Stack(
               alignment: widget.openCloseStackAlignment,
               children: [
-                FadeTransition(
-                  opacity: _expandAnimation,
-                  child: _closeButtonBuilder.builder(
-                    context,
-                    toggle,
-                    _expandAnimation,
+                if (widget.useWitcherAnimation)
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (child, anim) => RotationTransition(
+                      turns: child.key == ValueKey('icon1')
+                          ? Tween<double>(begin: 1, end: 0.75).animate(anim)
+                          : Tween<double>(begin: 0.75, end: 1).animate(anim),
+                      child: ScaleTransition(scale: anim, child: child),
+                    ),
+                    child: isOpen
+                        ? _closeButtonBuilder.builder(
+                            context,
+                            toggle,
+                            _expandAnimation,
+                          )
+                        : _buildTapToOpenFab(),
                   ),
-                ),
-                _buildTapToOpenFab(),
+                if (!widget.useWitcherAnimation) ...[
+                  FadeTransition(
+                    opacity: _expandAnimation,
+                    child: _closeButtonBuilder.builder(
+                      context,
+                      toggle,
+                      _expandAnimation,
+                    ),
+                  ),
+                  _buildTapToOpenFab()
+                ],
               ],
             ),
           ),
@@ -385,10 +411,14 @@ class ExpandableFabState extends State<ExpandableFab>
         );
         break;
       case ExpandableFabPos.center:
-        final screenSize = MediaQuery.of(context).size;
-        totalOffset = Offset(
-          screenSize.width / 2 - _closeButtonBuilder.size / 2,
-          offset.dy + buttonOffset,
+        // final screenSize = MediaQuery.of(context).size;
+        // totalOffset = Offset(
+        //   screenSize.width / 2 - _closeButtonBuilder.size / 2,
+        //   offset.dy + buttonOffset,
+        // );
+        totalOffset += Offset(
+          -widget.childrenOffset.dx - buttonOffset,
+          widget.childrenOffset.dy + buttonOffset,
         );
         break;
       default:
@@ -428,6 +458,7 @@ class ExpandableFabState extends State<ExpandableFab>
           offset: totalOffset,
           fabPos: widget.pos,
           animation: widget.childrenAnimation,
+          useChildWithFullWidth: widget.useChildWithFullWidth,
           child: widget.children[i],
         ),
       );
@@ -484,6 +515,7 @@ class _ExpandingActionButton extends StatelessWidget {
     required this.fabPos,
     required this.offset,
     required this.animation,
+    required this.useChildWithFullWidth,
   });
   final double directionInDegrees;
   final double maxDistance;
@@ -492,6 +524,7 @@ class _ExpandingActionButton extends StatelessWidget {
   final ExpandableFabPos fabPos;
   final Widget child;
   final ExpandableFabAnimation animation;
+  final bool useChildWithFullWidth;
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -499,11 +532,19 @@ class _ExpandingActionButton extends StatelessWidget {
       builder: (context, child) {
         final pos = Offset.fromDirection(
           directionInDegrees * (math.pi / 180.0),
-          progress.value * maxDistance,
+          progress.value * maxDistance + 19,
         );
         return Positioned(
-          right: fabPos == ExpandableFabPos.left ? null : offset.dx + pos.dx,
-          left: fabPos == ExpandableFabPos.left ? -offset.dx + pos.dx : null,
+          right: useChildWithFullWidth
+              ? 0
+              : fabPos == ExpandableFabPos.left
+                  ? null
+                  : offset.dx + pos.dx,
+          left: useChildWithFullWidth
+              ? 0
+              : fabPos == ExpandableFabPos.left
+                  ? -offset.dx + pos.dx
+                  : null,
           bottom: offset.dy + pos.dy,
           child: Transform.rotate(
             angle: animation == ExpandableFabAnimation.rotate
